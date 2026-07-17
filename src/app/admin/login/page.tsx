@@ -208,7 +208,7 @@ function LoginForm() {
 
 export default function AdminLoginPage() {
   return (
-    <main className="min-h-screen w-full flex items-center justify-center p-4 bg-[#090D16] relative overflow-hidden">
+    <main className="admin-theme-dark min-h-screen w-full flex items-center justify-center p-4 bg-background relative overflow-hidden text-foreground">
       
       {/* Background patterns */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(139,92,246,0.03),transparent_70%)] pointer-events-none" />

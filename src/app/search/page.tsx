@@ -70,7 +70,7 @@ function SearchContent() {
           <ArrowLeft className="h-4 w-4" />
           <span>Quay lại trang chủ</span>
         </Link>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
           {q ? `Kết quả tìm kiếm cho: "${q}"` : 'Tìm kiếm bài viết'}
         </h1>
       </div>
@@ -83,7 +83,7 @@ function SearchContent() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Tìm kiếm bài viết..."
-          className="w-full pl-12 pr-4 py-3 rounded-2xl border border-white/5 bg-slate-900/40 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-accent-cyan transition-all"
+          className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-slate-950/20 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-accent-cyan transition-all"
         />
       </form>
 
@@ -99,20 +99,20 @@ function SearchContent() {
         </div>
       ) : articles.length === 0 ? (
         q ? (
-          <div className="rounded-2xl border border-dashed border-white/10 p-16 text-center text-slate-500 space-y-2 bg-slate-900/10">
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 p-16 text-center text-slate-500 space-y-2 bg-slate-100/50 dark:bg-slate-900/10">
             <FileText className="h-10 w-10 mx-auto text-slate-600 animate-bounce" />
-            <p className="font-semibold text-slate-300">Không tìm thấy bài viết phù hợp</p>
-            <p className="text-sm">Hãy thử nhập từ khóa khác hoặc tìm chuyên mục khác.</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-300">Không tìm thấy bài viết phù hợp</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">Hãy thử nhập từ khóa khác hoặc tìm chuyên mục khác.</p>
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-white/10 p-16 text-center text-slate-500 space-y-2 bg-slate-900/10">
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-white/10 p-16 text-center text-slate-500 space-y-2 bg-slate-100/50 dark:bg-slate-900/10">
             <Search className="h-10 w-10 mx-auto text-slate-600" />
-            <p className="font-semibold text-slate-300">Nhập từ khóa để bắt đầu tìm kiếm</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-300">Nhập từ khóa để bắt đầu tìm kiếm</p>
           </div>
         )
       ) : (
         <div className="space-y-6">
-          <h2 className="text-lg font-bold text-white border-b border-white/5 pb-2">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-200 dark:border-white/5 pb-2">
             Tìm thấy {articles.length} kết quả phù hợp
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

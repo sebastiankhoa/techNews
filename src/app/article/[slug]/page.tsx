@@ -4,11 +4,11 @@ import React from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, User, Eye, Link2, ChevronRight, BookOpen } from 'lucide-react';
+import { ChevronRight, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Article, Category } from '@/types/database';
-import MarkdownRenderer from '@/components/MarkdownRenderer';
 import ArticleCard from '@/components/ArticleCard';
+import ArticleReader from '@/components/ArticleReader';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -32,10 +32,6 @@ const MOCK_ARTICLES: Article[] = [
     slug: 'nvidia-geforce-rtx-5090-ro-ri-thong-so-khung',
     summary: 'Thế hệ card đồ họa Blackwell tiếp theo của NVIDIA hứa hẹn sẽ mang lại bước nhảy vọt hiệu năng chưa từng có với bộ nhớ GDDR7 và kiến trúc 3nm tiên tiến.',
     content: `
-# Thế hệ card đồ họa Blackwell tiếp theo của NVIDIA
-
-Sau nhiều tháng đồn đoán, các thông số kỹ thuật đầu tiên về thế hệ card đồ họa Blackwell hàng đầu của NVIDIA - GeForce RTX 5090 - đã bắt đầu rò rỉ từ các nguồn tin chuỗi cung ứng uy tín. Trọng tâm của đợt nâng cấp này không chỉ nằm ở khả năng chơi game thuần túy mà là khả năng xử lý các mô hình ngôn ngữ lớn và tác vụ trí tuệ nhân tạo cục bộ (Local AI).
-
 ## Kiến trúc Blackwell 3nm và Bộ nhớ GDDR7
 
 Theo thông tin rò rỉ, GeForce RTX 5090 sẽ được xây dựng trên tiến trình TSMC 3nm tùy chỉnh cho NVIDIA, giúp tối ưu hóa mật độ bóng bán dẫn và tiết kiệm điện năng đáng kể. 
@@ -83,7 +79,15 @@ Với việc bổ sung các nhân Tensor thế hệ thứ 5, RTX 5090 sẽ hỗ 
     title: 'Trải Nghiệm GPT-5 Beta: Trí Tuệ Nhân Tạo Đạt Ngưỡng Tư Duy Như Con Người?',
     slug: 'trai-nghiem-gpt-5-beta-tri-tue-nhan-tao-dat-nguong-tu-duy',
     summary: 'OpenAI đã âm thầm cấp quyền truy cập phiên bản thử nghiệm siêu AI thế hệ mới cho một số đối tác chiến lược. Những ghi nhận đầu tiên cho thấy khả năng suy luận logic vượt bậc.',
-    content: 'Nội dung chi tiết về GPT-5...',
+    content: `
+## Sự xuất hiện bất ngờ của GPT-5
+
+OpenAI đã âm thầm cấp quyền truy cập phiên bản thử nghiệm siêu AI thế hệ mới cho một số đối tác chiến lược. Những ghi nhận đầu tiên cho thấy khả năng suy luận logic vượt bậc.
+
+## Khả năng suy luận tư duy đa bước
+
+Hệ thống được cho là có khả năng lập kế hoạch giải quyết các vấn đề phức tạp qua nhiều bước trung gian, tự kiểm tra lỗi và sửa đổi hành vi tương tự như cách con người tư duy.
+    `,
     image_url: 'https://images.unsplash.com/photo-1677442136019-21780efad99a?w=800&auto=format&fit=crop&q=60',
     author_name: 'Khánh Huyền',
     category_id: '1',
@@ -147,6 +151,8 @@ export default async function ArticleDetailPage({ params }: Props) {
 
   let article: Article | null = null;
   let relatedArticles: Article[] = [];
+  let prevArticle: Article | null = null;
+  let nextArticle: Article | null = null;
   let isUsingMock = false;
 
   try {
@@ -182,6 +188,33 @@ export default async function ArticleDetailPage({ params }: Props) {
         .limit(3);
 
       relatedArticles = relData || [];
+
+      // 3. Fetch bài viết trước và sau
+      const { data: prevData } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('category_id', artData.category_id)
+        .eq('status', 'published')
+        .lt('published_at', artData.published_at)
+        .order('published_at', { ascending: false })
+        .limit(1);
+      
+      if (prevData && prevData.length > 0) {
+        prevArticle = prevData[0];
+      }
+
+      const { data: nextData } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('category_id', artData.category_id)
+        .eq('status', 'published')
+        .gt('published_at', artData.published_at)
+        .order('published_at', { ascending: true })
+        .limit(1);
+
+      if (nextData && nextData.length > 0) {
+        nextArticle = nextData[0];
+      }
     }
   } catch (err) {
     console.error('Lỗi khi lấy chi tiết bài viết, chuyển sang Mock data:', err);
@@ -189,6 +222,11 @@ export default async function ArticleDetailPage({ params }: Props) {
     if (article) {
       isUsingMock = true;
       relatedArticles = MOCK_ARTICLES.filter((a) => a.id !== article!.id);
+      
+      // Fallback lân cận cho mock data
+      const idx = MOCK_ARTICLES.findIndex(a => a.id === article!.id);
+      prevArticle = idx > 0 ? MOCK_ARTICLES[idx - 1] : null;
+      nextArticle = idx < MOCK_ARTICLES.length - 1 ? MOCK_ARTICLES[idx + 1] : null;
     }
   }
 
@@ -196,29 +234,14 @@ export default async function ArticleDetailPage({ params }: Props) {
     notFound();
   }
 
-  // Format ngày
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'Đang cập nhật';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const coverImage = article.image_url || 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&auto=format&fit=crop&q=80';
-
   return (
-    <article className="article-container py-8 flex flex-col gap-8">
+    <article className="article-container py-8 flex flex-col gap-6">
       {/* Breadcrumbs */}
-      <nav className="flex items-center space-x-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+      <nav className="flex items-center space-x-2 text-xs font-bold text-slate-500 uppercase tracking-widest">
         <Link href="/" className="hover:text-accent-cyan transition-colors">
           Trang chủ
         </Link>
-        <ChevronRight className="h-3 w-3" />
+        <ChevronRight className="h-3 w-3 text-slate-600" />
         {article.category && (
           <>
             <Link
@@ -227,90 +250,32 @@ export default async function ArticleDetailPage({ params }: Props) {
             >
               {article.category.name}
             </Link>
-            <ChevronRight className="h-3 w-3" />
+            <ChevronRight className="h-3 w-3 text-slate-600" />
           </>
         )}
-        <span className="text-slate-400 truncate max-w-[200px] md:max-w-md">
+        <span className="text-slate-500 dark:text-slate-400 truncate max-w-[150px] sm:max-w-xs md:max-w-md">
           {article.title}
         </span>
       </nav>
 
-      {/* Header Info */}
-      <div className="space-y-4">
-        {article.category && (
-          <Link
-            href={`/category/${article.category.slug}`}
-            className="inline-block rounded-full bg-slate-900 border border-accent-cyan/20 px-3.5 py-1 text-xs font-semibold text-accent-cyan hover:bg-accent-cyan hover:text-slate-950 transition-all duration-300"
-          >
-            {article.category.name}
-          </Link>
-        )}
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white leading-tight tracking-tight">
-          {article.title}
-        </h1>
-        <p className="text-base md:text-lg text-slate-300 font-medium italic border-l-2 border-primary pl-4 py-1 leading-relaxed">
-          {article.summary}
-        </p>
-
-        {/* Metadata section */}
-        <div className="flex flex-wrap items-center gap-y-2 gap-x-6 text-xs text-slate-400 border-y border-white/5 py-4 my-6">
-          <span className="flex items-center space-x-1.5">
-            <User className="h-4 w-4 text-primary" />
-            <span>Được viết bởi: <strong>{article.author_name}</strong></span>
-          </span>
-          <span className="flex items-center space-x-1.5">
-            <Calendar className="h-4 w-4 text-secondary" />
-            <span>Đăng ngày: {formatDate(article.published_at)}</span>
-          </span>
-          <span className="flex items-center space-x-1.5 md:ml-auto">
-            <Eye className="h-4 w-4" />
-            <span>{article.views + (isUsingMock ? 0 : 1)} lượt xem</span>
-          </span>
-        </div>
-      </div>
-
-      {/* Cover Image */}
-      <div className="relative aspect-[21/9] w-full overflow-hidden rounded-2xl border border-white/5 shadow-2xl">
-        <img src={coverImage} alt={article.title} className="h-full w-full object-cover" />
-      </div>
-
-      {/* Article Content */}
-      <div className="glass-panel rounded-2xl p-6 md:p-10 shadow-xl border-white/5 bg-slate-900/10">
-        <MarkdownRenderer content={article.content} />
-      </div>
-
-      {/* Reference Source Card */}
-      {(article.source_name || article.source_url) && (
-        <div className="flex items-center justify-between p-4 rounded-xl border border-white/5 bg-slate-900/30 text-xs text-slate-400">
-          <span className="flex items-center space-x-1.5">
-            <Link2 className="h-4 w-4 text-accent-cyan" />
-            <span>Nguồn tham khảo:</span>
-            {article.source_url ? (
-              <a
-                href={article.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-bold text-white hover:text-accent-cyan transition-colors underline decoration-dashed"
-              >
-                {article.source_name || 'Liên kết nguồn'}
-              </a>
-            ) : (
-              <span className="font-bold text-white">{article.source_name}</span>
-            )}
-          </span>
-        </div>
-      )}
+      {/* Main Reader Wrapper */}
+      <ArticleReader 
+        article={article} 
+        relatedArticles={relatedArticles} 
+        prevArticle={prevArticle} 
+        nextArticle={nextArticle} 
+      />
 
       {/* Related Articles Section */}
-      <section className="space-y-6 pt-12 border-t border-white/5">
+      <section className="space-y-6 pt-12 border-t border-slate-200 dark:border-white/5">
         <div className="flex items-center space-x-2">
-          <BookOpen className="h-6 w-6 text-accent-cyan" />
-          <h2 className="text-xl font-bold tracking-tight text-white">
+          <BookOpen className="h-5 w-5 text-accent-cyan" />
+          <h2 className="text-lg font-bold uppercase tracking-widest text-slate-900 dark:text-white">
             Bài viết liên quan
           </h2>
         </div>
         {relatedArticles.length === 0 ? (
-          <p className="text-sm text-slate-500 italic">Không có bài viết liên quan nào khác.</p>
+          <p className="text-xs text-slate-500 italic">Không có bài viết liên quan nào khác.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {relatedArticles.map((relArt) => (

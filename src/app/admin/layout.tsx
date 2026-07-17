@@ -53,7 +53,7 @@ export default function AdminLayout({
 
   return (
     <div 
-      className="min-h-screen bg-background text-foreground w-full relative"
+      className="admin-theme-dark min-h-screen bg-background text-foreground w-full relative"
       style={{ '--sidebar-width': isCollapsed ? '64px' : '256px' } as React.CSSProperties}
     >
       

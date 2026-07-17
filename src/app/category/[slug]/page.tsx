@@ -129,7 +129,7 @@ export default async function CategoryPage({ params }: Props) {
   return (
     <div className="public-container py-8 flex flex-col gap-8">
       {/* Category Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-slate-900/20 p-8 md:p-12">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200 dark:border-white/5 bg-slate-100/50 dark:bg-slate-900/20 p-8 md:p-12">
         {/* Background glow decorator */}
         <div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-primary to-secondary opacity-20 blur-3xl"></div>
         <div className="absolute right-0 bottom-0 h-64 w-64 rounded-full bg-accent-cyan/10 blur-3xl"></div>
@@ -139,10 +139,10 @@ export default async function CategoryPage({ params }: Props) {
             <LayoutGrid className="h-4.5 w-4.5" />
             <span>Chuyên mục</span>
           </div>
-          <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight">
+          <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             {category.name}
           </h1>
-          <p className="text-sm md:text-base text-slate-300 leading-relaxed">
+          <p className="text-sm md:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
             {category.description || 'Tổng hợp các bài viết phân tích, tin tức công nghệ mới nhất cùng chủ đề.'}
           </p>
         </div>
@@ -150,12 +150,12 @@ export default async function CategoryPage({ params }: Props) {
 
       {/* Grid of Articles */}
       <div className="space-y-6">
-        <h2 className="text-xl font-bold text-white border-b border-white/5 pb-2">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 border-b border-slate-200 dark:border-slate-800 pb-2">
           Danh sách bài viết ({articles.length})
         </h2>
 
         {articles.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center text-slate-500">
+          <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-12 text-center text-slate-500 bg-slate-100/30 dark:bg-slate-900/10">
             Hiện tại chưa có bài viết nào thuộc chuyên mục này. Hãy quay lại sau!
           </div>
         ) : (
