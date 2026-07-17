@@ -1,8 +1,46 @@
-import React from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Cpu } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function Footer() {
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
+
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: adminUser } = await supabase
+          .from('admin_users')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        setHasAdminAccess(!!adminUser);
+      } else {
+        setHasAdminAccess(false);
+      }
+    }
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const { data: adminUser } = await supabase
+          .from('admin_users')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single();
+        setHasAdminAccess(!!adminUser);
+      } else {
+        setHasAdminAccess(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
   return (
     <footer className="border-t border-white/5 bg-background">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -98,11 +136,13 @@ export default function Footer() {
                 Về chúng tôi
               </h3>
               <ul className="mt-4 space-y-2">
-                <li>
-                  <Link href="/admin" className="text-sm text-slate-400 hover:text-white transition-colors">
-                    Hệ thống Quản trị viên
-                  </Link>
-                </li>
+                {hasAdminAccess && (
+                  <li>
+                    <Link href="/admin" className="text-sm text-slate-400 hover:text-white transition-colors">
+                      Hệ thống Quản trị viên
+                    </Link>
+                  </li>
+                )}
                 <li>
                   <span className="text-sm text-slate-400">
                     Email: contact@technews.local

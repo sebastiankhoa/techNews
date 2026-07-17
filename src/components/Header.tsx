@@ -12,6 +12,41 @@ export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const pathname = usePathname();
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
+
+  useEffect(() => {
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: adminUser } = await supabase
+          .from('admin_users')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        setHasAdminAccess(!!adminUser);
+      } else {
+        setHasAdminAccess(false);
+      }
+    }
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const { data: adminUser } = await supabase
+          .from('admin_users')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single();
+        setHasAdminAccess(!!adminUser);
+      } else {
+        setHasAdminAccess(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
   
   // Search states & refs
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -196,17 +231,19 @@ export default function Header() {
             </button>
           )}
 
-          <Link
-            href="/admin"
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
-              isAdmin
-                ? 'bg-primary/20 border-primary/50 text-accent-purple shadow-sm shadow-primary/10'
-                : 'border-white/10 text-slate-300 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <Settings className="h-3.5 w-3.5" />
-            <span>Quản trị</span>
-          </Link>
+          {hasAdminAccess && (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                isAdmin
+                  ? 'bg-primary/20 border-primary/50 text-accent-purple shadow-sm shadow-primary/10'
+                  : 'border-white/10 text-slate-300 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <Settings className="h-3.5 w-3.5" />
+              <span>Quản trị</span>
+            </Link>
+          )}
         </div>
 
         {/* Mobile menu button */}
@@ -220,13 +257,15 @@ export default function Header() {
             <Search className="h-5 w-5" />
           </button>
           
-          <Link
-            href="/admin"
-            className="p-2 text-slate-400 hover:text-white"
-            aria-label="Admin Page"
-          >
-            <Settings className="h-5 w-5" />
-          </Link>
+          {hasAdminAccess && (
+            <Link
+              href="/admin"
+              className="p-2 text-slate-400 hover:text-white"
+              aria-label="Admin Page"
+            >
+              <Settings className="h-5 w-5" />
+            </Link>
+          )}
           <button
             onClick={() => setIsOpen(!isOpen)}
             className="inline-flex items-center justify-center rounded-md p-2 text-slate-400 hover:bg-white/5 hover:text-white focus:outline-none"
@@ -270,16 +309,18 @@ export default function Header() {
 
           <div className="py-1 border-t border-white/5 my-1"></div>
 
-          <Link
-            href="/admin"
-            onClick={() => setIsOpen(false)}
-            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-base font-medium hover:bg-white/5 ${
-              isAdmin ? 'text-accent-purple bg-primary/10' : 'text-slate-300'
-            }`}
-          >
-            <Settings className="h-5 w-5" />
-            <span>Quản trị</span>
-          </Link>
+          {hasAdminAccess && (
+            <Link
+              href="/admin"
+              onClick={() => setIsOpen(false)}
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-base font-medium hover:bg-white/5 ${
+                isAdmin ? 'text-accent-purple bg-primary/10' : 'text-slate-300'
+              }`}
+            >
+              <Settings className="h-5 w-5" />
+              <span>Quản trị</span>
+            </Link>
+          )}
         </div>
       )}
     </header>

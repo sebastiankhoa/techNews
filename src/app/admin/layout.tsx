@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import AdminSidebar from '@/components/AdminSidebar';
 import { Menu, X, Globe, User, Database } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 export default function AdminLayout({
   children,
@@ -12,12 +13,24 @@ export default function AdminLayout({
 }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  const supabase = createClient();
 
   useEffect(() => {
     const saved = localStorage.getItem('admin-sidebar-collapsed');
     if (saved === 'true') {
       setIsCollapsed(true);
     }
+  }, []);
+
+  useEffect(() => {
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setEmail(user.email ?? null);
+      }
+    }
+    loadUser();
   }, []);
 
   const toggleSidebar = () => {
@@ -100,8 +113,15 @@ export default function AdminLayout({
                 <span className="hidden sm:inline">Xem website</span>
               </Link>
               
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white border border-white/10">
-                <User className="h-4 w-4" />
+              <div className="flex items-center gap-2">
+                {email && (
+                  <span className="text-xs text-slate-400 font-medium hidden md:inline-block max-w-[150px] truncate" title={email}>
+                    {email}
+                  </span>
+                )}
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white border border-white/10">
+                  <User className="h-4 w-4" />
+                </div>
               </div>
             </div>
           </div>
