@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import React from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -102,7 +104,7 @@ Với việc bổ sung các nhân Tensor thế hệ thứ 5, RTX 5090 sẽ hỗ 
 // Sinh SEO Metadata động cho trang bài viết
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  
+
   let article: Article | null = null;
   try {
     const { data } = await supabase
@@ -178,7 +180,7 @@ export default async function ArticleDetailPage({ params }: Props) {
         .neq('id', artData.id)
         .order('published_at', { ascending: false })
         .limit(3);
-      
+
       relatedArticles = relData || [];
     }
   } catch (err) {

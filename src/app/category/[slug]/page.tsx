@@ -1,3 +1,5 @@
+export const runtime = 'edge';
+
 import React from 'react';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -47,7 +49,7 @@ const MOCK_ARTICLES: Article[] = [
 // Sinh SEO Metadata động cho trang chuyên mục
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  
+
   let category: Category | null = null;
   try {
     const { data } = await supabase
@@ -131,7 +133,7 @@ export default async function CategoryPage({ params }: Props) {
         {/* Background glow decorator */}
         <div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-primary to-secondary opacity-20 blur-3xl"></div>
         <div className="absolute right-0 bottom-0 h-64 w-64 rounded-full bg-accent-cyan/10 blur-3xl"></div>
-        
+
         <div className="relative z-10 space-y-4 max-w-3xl">
           <div className="inline-flex items-center space-x-2 text-xs font-semibold text-accent-cyan tracking-wider uppercase">
             <LayoutGrid className="h-4.5 w-4.5" />
