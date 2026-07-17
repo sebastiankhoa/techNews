@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/Toast';
 import { Cpu, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 
+import Link from 'next/link';
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -16,20 +18,41 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    async function checkSession() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: adminUser } = await supabase
+          .from('admin_users')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        if (adminUser) {
+          router.push('/admin');
+        }
+      }
+    }
+    checkSession();
+  }, [router, supabase]);
 
   // Check for error parameters from middleware
   useEffect(() => {
     const errorParam = searchParams.get('error');
     if (errorParam === 'unauthorized') {
       toast.error('Tài khoản của bạn không có quyền quản trị hoặc chưa được phân quyền!');
+      setFormError('Tài khoản của bạn không có quyền quản trị hoặc chưa được phân quyền!');
     }
   }, [searchParams, toast]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
     if (!email.trim() || !password.trim()) {
-      toast.error('Vui lòng điền đầy đủ email và mật khẩu!');
+      setFormError('Vui lòng điền đầy đủ email và mật khẩu!');
       return;
     }
 
@@ -42,7 +65,7 @@ function LoginForm() {
       });
 
       if (error) {
-        toast.error(error.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại thông tin!');
+        setFormError(error.message || 'Đăng nhập thất bại, vui lòng kiểm tra lại thông tin!');
         setLoading(false);
         return;
       }
@@ -57,7 +80,7 @@ function LoginForm() {
       if (adminError || !adminUser) {
         // Log out immediately if not admin
         await supabase.auth.signOut();
-        toast.error('Đăng nhập thất bại: Tài khoản này không được cấp quyền quản trị!');
+        setFormError('Đăng nhập thất bại: Tài khoản này không được cấp quyền quản trị!');
         setLoading(false);
         return;
       }
@@ -69,7 +92,7 @@ function LoginForm() {
       router.push(nextPath);
       router.refresh();
     } catch (err: any) {
-      toast.error('Có lỗi xảy ra: ' + (err.message || 'Lỗi hệ thống'));
+      setFormError('Có lỗi xảy ra: ' + (err.message || 'Lỗi hệ thống'));
       setLoading(false);
     }
   };
@@ -95,6 +118,13 @@ function LoginForm() {
           </p>
         </div>
       </div>
+
+      {/* Form Error Message */}
+      {formError && (
+        <div className="p-3.5 rounded-xl bg-red-950/20 border border-red-500/20 text-xs text-red-400 font-semibold animate-in fade-in duration-200">
+          {formError}
+        </div>
+      )}
 
       {/* Form */}
       <form onSubmit={handleLogin} className="flex flex-col gap-4">
@@ -161,10 +191,16 @@ function LoginForm() {
       </form>
 
       {/* Footer Info */}
-      <div className="text-center">
+      <div className="text-center flex flex-col gap-3">
         <p className="text-[10px] text-slate-600">
           Chỉ dành cho Quản trị viên của TechNews Portal.
         </p>
+        <Link 
+          href="/" 
+          className="text-xs font-semibold text-slate-400 hover:text-accent-cyan transition-colors flex items-center justify-center gap-1.5 mt-1"
+        >
+          <span>← Quay về trang chủ</span>
+        </Link>
       </div>
     </div>
   );
