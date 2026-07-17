@@ -1,3 +1,6 @@
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 import React from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -158,7 +161,7 @@ export default async function Home() {
       .from('categories')
       .select('*')
       .order('name');
-    
+
     if (catError) throw catError;
     categories = catData || [];
 
