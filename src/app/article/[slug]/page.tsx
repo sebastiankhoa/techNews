@@ -166,16 +166,6 @@ export default async function ArticleDetailPage({ params }: Props) {
     if (artError || !artData) throw new Error('Article not found');
     article = artData;
 
-    // Tăng lượt xem bài viết (views + 1) trong chế độ chạy thật
-    try {
-      await supabase
-        .from('articles')
-        .update({ views: (artData.views || 0) + 1 })
-        .eq('id', artData.id);
-    } catch (viewErr) {
-      console.warn('Không thể cập nhật số lượt xem bài viết:', viewErr);
-    }
-
     // 2. Fetch bài viết liên quan (cùng chuyên mục, loại bỏ bài viết hiện tại)
     if (artData.category_id) {
       const { data: relData } = await supabase

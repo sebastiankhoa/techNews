@@ -8,6 +8,7 @@ import { Article } from '@/types/database';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import ArticleCard, { estimateReadingTime } from '@/components/ArticleCard';
 import { useToast } from '@/components/Toast';
+import { supabase } from '@/lib/supabase';
 
 interface Heading {
   text: string;
@@ -22,6 +23,9 @@ interface ArticleReaderProps {
   nextArticle: Article | null;
 }
 
+// Lưu trữ danh sách ID bài viết đã được tăng lượt xem trong session hiện tại để tránh trùng lặp (ví dụ: do React Strict Mode hoặc back-navigation)
+const viewedArticles = new Set<string>();
+
 export default function ArticleReader({ article, relatedArticles, prevArticle, nextArticle }: ArticleReaderProps) {
   const toast = useToast();
   
@@ -29,6 +33,23 @@ export default function ArticleReader({ article, relatedArticles, prevArticle, n
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeId, setActiveId] = useState<string>('');
   const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // Tăng lượt xem bài viết thông qua RPC khi truy cập
+  useEffect(() => {
+    if (article?.id && !viewedArticles.has(article.id)) {
+      // Đánh dấu đã xem bài viết này ngay lập tức để tránh cuộc gọi trùng lặp song song
+      viewedArticles.add(article.id);
+      
+      supabase.rpc('increment_article_views', { article_id: article.id })
+        .then(({ error }) => {
+          if (error) {
+            console.warn('Không thể tự động tăng số lượt xem:', error);
+            // Nếu có lỗi xảy ra thì cho phép thử lại
+            viewedArticles.delete(article.id);
+          }
+        });
+    }
+  }, [article?.id]);
 
   // Load headings from content
   useEffect(() => {
