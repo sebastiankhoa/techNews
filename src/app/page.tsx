@@ -414,23 +414,31 @@ export default async function Home() {
           </h2>
         </div>
 
-        {/* Lọc hiển thị 3 chuyên mục lớn có bài viết */}
-        {categories.slice(0, 3).map((category) => {
-          let categoryArticles = articles
-            .filter((a) => a.category_id === category.id || (isUsingMock && a.category?.slug === category.slug))
-            .filter((a) => !topDisplayedIds.has(a.id))
-            .slice(0, 3);
-
-          // Nếu lọc hết thì fallback lấy từ danh sách gốc để đảm bảo không bị trống
-          if (categoryArticles.length === 0) {
-            categoryArticles = articles
+        {/* Lọc hiển thị các chuyên mục lớn có bài viết */}
+        {categories
+          .filter((category) => {
+            const categoryArticlesCount = articles.filter(
+              (a) => a.category_id === category.id || (isUsingMock && a.category?.slug === category.slug)
+            ).length;
+            return categoryArticlesCount > 0;
+          })
+          .slice(0, 4) // Hiển thị tối đa 4 chuyên mục có bài viết
+          .map((category) => {
+            let categoryArticles = articles
               .filter((a) => a.category_id === category.id || (isUsingMock && a.category?.slug === category.slug))
+              .filter((a) => !topDisplayedIds.has(a.id))
               .slice(0, 3);
-          }
 
-          if (categoryArticles.length === 0) return null;
+            // Nếu lọc hết thì fallback lấy từ danh sách gốc để đảm bảo không bị trống
+            if (categoryArticles.length === 0) {
+              categoryArticles = articles
+                .filter((a) => a.category_id === category.id || (isUsingMock && a.category?.slug === category.slug))
+                .slice(0, 3);
+            }
 
-          const accent = getCategoryAccent(category.slug);
+            if (categoryArticles.length === 0) return null;
+
+            const accent = getCategoryAccent(category.slug);
 
           return (
             <div key={category.id} className="space-y-6">
