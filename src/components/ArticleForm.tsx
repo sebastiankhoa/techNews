@@ -366,7 +366,7 @@ export default function ArticleForm({ articleId }: ArticleFormProps) {
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">Nội dung chi tiết (Rich Text Editor) <span className="text-red-500">*</span></label>
-                    <span className="text-[10px] text-slate-500 font-medium">Mẹo: Sử dụng Toolbar để định dạng nhanh hoặc dán HTML</span>
+                    <span className="text-[10px] text-slate-500 font-medium">Mẹo: Sử dụng Toolbar để định dạng nhanh hoặc chuyển sang chế độ Sửa HTML</span>
                   </div>
                   <TiptapEditor value={content} onChange={setContent} />
                 </div>

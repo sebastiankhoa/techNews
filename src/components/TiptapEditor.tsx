@@ -14,7 +14,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Minus, Undo, Redo,
   Link, Image, Upload, Video, Trash2, FileCode, Check, X, Loader2,
-  Maximize2, Minimize2
+  Maximize2, Minimize2, Eye, Copy, Sparkles, Code2
 } from 'lucide-react';
 
 interface TiptapEditorProps {
@@ -22,16 +22,58 @@ interface TiptapEditorProps {
   onChange: (html: string) => void;
 }
 
-// Client-side HTML Sanitizer to prevent XSS and only allow safe tags
+// Format/indent HTML string cleanly for readability in code editor
+function formatHtml(html: string): string {
+  if (typeof window === 'undefined' || !html) return html || '';
+  try {
+    let formatted = '';
+    const reg = /(>)(<)(\/*)/g;
+    let xml = html.replace(reg, '$1\r\n$2$3');
+    let pad = 0;
+    xml.split('\r\n').forEach((node) => {
+      let indent = 0;
+      if (node.match(/.+<\/\w[^>]*>$/)) {
+        indent = 0;
+      } else if (node.match(/^<\/\w/)) {
+        if (pad !== 0) {
+          pad -= 1;
+        }
+      } else if (node.match(/^<\w[^>]*[^\/]>$/)) {
+        // Opening tag
+        const isVoid = /^<(img|br|hr|input|meta|link|col|area|embed|source|track|wbr)/i.test(node);
+        if (!isVoid) {
+          indent = 1;
+        }
+      } else {
+        indent = 0;
+      }
+
+      let padding = '';
+      for (let i = 0; i < pad; i++) {
+        padding += '  ';
+      }
+
+      formatted += padding + node + '\n';
+      pad += indent;
+    });
+    return formatted.trim();
+  } catch {
+    return html;
+  }
+}
+
+// Client-side HTML Sanitizer to prevent XSS while preserving safe attributes & structures
 function sanitizeHtml(html: string): string {
   if (typeof window === 'undefined') return html;
+  if (!html || !html.trim()) return '';
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
   const allowedTags = new Set([
-    'p', 'br', 'hr', 'h2', 'h3', 'h4', 'strong', 'em', 'u', 's', 'blockquote',
-    'ul', 'ol', 'li', 'pre', 'code', 'img', 'a', 'iframe', 'span', 'div'
+    'p', 'br', 'hr', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'em', 'i', 'u', 's', 'blockquote',
+    'ul', 'ol', 'li', 'pre', 'code', 'img', 'a', 'iframe', 'span', 'div', 'table', 'thead', 'tbody',
+    'tr', 'th', 'td', 'figure', 'figcaption'
   ]);
 
   const cleanNode = (node: Node): Node | null => {
@@ -50,35 +92,61 @@ function sanitizeHtml(html: string): string {
 
       const cleanElement = document.createElement(tagName);
 
-      // Copy only safe attributes
+      // Copy safe attributes
+      if (element.hasAttribute('class')) {
+        cleanElement.setAttribute('class', element.getAttribute('class') || '');
+      }
+
+      if (element.hasAttribute('style')) {
+        const style = element.getAttribute('style') || '';
+        if (!/expression|javascript:|url\(/i.test(style)) {
+          cleanElement.setAttribute('style', style);
+        }
+      }
+
+      if (element.hasAttribute('title')) {
+        cleanElement.setAttribute('title', element.getAttribute('title') || '');
+      }
+
+      if (element.hasAttribute('id')) {
+        cleanElement.setAttribute('id', element.getAttribute('id') || '');
+      }
+
       if (tagName === 'a') {
         const href = element.getAttribute('href');
-        if (href && (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('/'))) {
+        if (href && (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('/') || href.startsWith('#') || href.startsWith('mailto:'))) {
           cleanElement.setAttribute('href', href);
-          cleanElement.setAttribute('target', '_blank');
+          if (element.hasAttribute('target')) {
+            cleanElement.setAttribute('target', element.getAttribute('target') || '_blank');
+          } else {
+            cleanElement.setAttribute('target', '_blank');
+          }
           cleanElement.setAttribute('rel', 'noopener noreferrer');
         }
       } else if (tagName === 'img') {
         const src = element.getAttribute('src');
-        if (src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image/'))) {
+        if (src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/') || src.startsWith('data:image/'))) {
           cleanElement.setAttribute('src', src);
         }
-        const alt = element.getAttribute('alt');
-        if (alt) cleanElement.setAttribute('alt', alt);
+        if (element.hasAttribute('alt')) cleanElement.setAttribute('alt', element.getAttribute('alt') || '');
+        if (element.hasAttribute('width')) cleanElement.setAttribute('width', element.getAttribute('width') || '');
+        if (element.hasAttribute('height')) cleanElement.setAttribute('height', element.getAttribute('height') || '');
       } else if (tagName === 'iframe') {
         const src = element.getAttribute('src') || '';
-        // Strict check to only allow YouTube embed urls
         if (
           src.startsWith('https://www.youtube.com/') ||
           src.startsWith('https://youtube.com/') ||
-          src.startsWith('https://www.youtube-nocookie.com/')
+          src.startsWith('https://www.youtube-nocookie.com/') ||
+          src.startsWith('https://player.vimeo.com/')
         ) {
           cleanElement.setAttribute('src', src);
           cleanElement.setAttribute('frameborder', '0');
           cleanElement.setAttribute('allowfullscreen', 'true');
           cleanElement.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+          if (element.hasAttribute('width')) cleanElement.setAttribute('width', element.getAttribute('width') || '100%');
+          if (element.hasAttribute('height')) cleanElement.setAttribute('height', element.getAttribute('height') || '360');
         } else {
-          return null; // Drop unsafe iframe
+          return null;
         }
       }
 
@@ -108,12 +176,17 @@ function sanitizeHtml(html: string): string {
 
 export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
   const toast = useToast();
-  const [activeModal, setActiveModal] = useState<'link' | 'image-url' | 'youtube' | 'paste-html' | null>(null);
+  const [activeModal, setActiveModal] = useState<'link' | 'image-url' | 'youtube' | 'edit-html' | null>(null);
   const [modalInput, setModalInput] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  
+  // HTML Code View State
+  const [isCodeView, setIsCodeView] = useState(false);
+  const [codeValue, setCodeValue] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -182,7 +255,9 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
     ],
     content: value,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      if (!isCodeView) {
+        onChange(editor.getHTML());
+      }
     },
     editorProps: {
       attributes: {
@@ -225,14 +300,54 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
     closeModal();
   };
 
-  // Handle HTML Paste ingestion
-  const handlePasteHtml = () => {
-    if (modalInput) {
+  // Handle HTML Modal Submission
+  const handleApplyModalHtml = () => {
+    if (modalInput !== undefined) {
       const sanitized = sanitizeHtml(modalInput);
       editor.commands.setContent(sanitized);
       onChange(sanitized);
+      if (isCodeView) {
+        setCodeValue(formatHtml(sanitized));
+      }
+      toast.success('Đã cập nhật mã HTML!');
     }
     closeModal();
+  };
+
+  // Toggle Code View Mode
+  const toggleCodeView = () => {
+    if (isCodeView) {
+      // Switching from Code View back to Visual Editor
+      const sanitized = sanitizeHtml(codeValue);
+      editor.commands.setContent(sanitized);
+      onChange(sanitized);
+      setIsCodeView(false);
+      toast.success('Đã chuyển sang giao diện soạn thảo trực quan');
+    } else {
+      // Switching from Visual Editor to Code View
+      const currentHtml = editor.getHTML();
+      setCodeValue(formatHtml(currentHtml));
+      setIsCodeView(true);
+      toast.info('Đã bật chế độ chỉnh sửa mã HTML');
+    }
+  };
+
+  // Format Code in Code View
+  const handleFormatCode = () => {
+    const formatted = formatHtml(codeValue);
+    setCodeValue(formatted);
+    onChange(formatted);
+    toast.success('Đã tự động định dạng mã HTML!');
+  };
+
+  // Copy Code to Clipboard
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(codeValue);
+      toast.success('Đã sao chép mã HTML vào bộ nhớ tạm!');
+    } catch {
+      toast.error('Không thể sao chép mã!');
+    }
   };
 
   // Handle Local image upload to Supabase Storage
@@ -240,7 +355,6 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate if it is an image
     if (!file.type.startsWith('image/')) {
       toast.warning('Vui lòng chỉ chọn tệp hình ảnh!');
       return;
@@ -260,12 +374,10 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         throw new Error(uploadError.message);
       }
 
-      // Retrieve public URL from Supabase
       const { data } = supabase.storage
         .from('article-images')
         .getPublicUrl(filePath);
 
-      // Insert image inside editor
       editor.chain().focus().setImage({ src: data.publicUrl }).run();
     } catch (err: any) {
       console.error('Image upload failed:', err);
@@ -281,15 +393,21 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
     setModalInput('');
   };
 
-  const triggerModal = (type: 'link' | 'image-url' | 'youtube' | 'paste-html') => {
+  const triggerModal = (type: 'link' | 'image-url' | 'youtube' | 'edit-html') => {
     if (type === 'link') {
       const prevUrl = editor.getAttributes('link').href || '';
       setModalInput(prevUrl);
+    } else if (type === 'edit-html') {
+      const currentHtml = isCodeView ? codeValue : editor.getHTML();
+      setModalInput(formatHtml(currentHtml));
     } else {
       setModalInput('');
     }
     setActiveModal(type);
   };
+
+  const lineCount = codeValue.split('\n').length;
+  const lineNumbers = Array.from({ length: lineCount }, (_, i) => i + 1);
 
   const editorLayout = (
     <div className={isFullscreen ? "fixed inset-0 z-[9999] bg-slate-950 flex flex-col w-screen h-screen" : "w-full border border-white/10 rounded-2xl bg-slate-950/20 overflow-hidden flex flex-col relative"}>
@@ -303,7 +421,7 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().undo()}
+          disabled={isCodeView || !editor.can().undo()}
           className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
           title="Hoàn tác (Undo)"
         >
@@ -312,7 +430,7 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().redo()}
+          disabled={isCodeView || !editor.can().redo()}
           className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
           title="Làm lại (Redo)"
         >
@@ -325,7 +443,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('bold') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('bold') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Chữ đậm (Bold)"
         >
           <Bold className="h-4 w-4" />
@@ -333,7 +452,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('italic') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('italic') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Chữ nghiêng (Italic)"
         >
           <Italic className="h-4 w-4" />
@@ -341,7 +461,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('underline') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('underline') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Gạch chân (Underline)"
         >
           <UnderlineIcon className="h-4 w-4" />
@@ -353,7 +474,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('heading', { level: 2 }) ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('heading', { level: 2 }) && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Tiêu đề H2"
         >
           <Heading2 className="h-4 w-4" />
@@ -361,7 +483,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('heading', { level: 3 }) ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('heading', { level: 3 }) && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Tiêu đề H3"
         >
           <Heading3 className="h-4 w-4" />
@@ -373,7 +496,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('bulletList') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('bulletList') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Danh sách gạch đầu dòng"
         >
           <List className="h-4 w-4" />
@@ -381,7 +505,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('orderedList') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('orderedList') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Danh sách đánh số"
         >
           <ListOrdered className="h-4 w-4" />
@@ -389,7 +514,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('blockquote') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('blockquote') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Trích dẫn (Blockquote)"
         >
           <Quote className="h-4 w-4" />
@@ -397,7 +523,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('codeBlock') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('codeBlock') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Khối mã nguồn (Code Block)"
         >
           <Code className="h-4 w-4" />
@@ -409,7 +536,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => triggerModal('link')}
-          className={`p-2 rounded-lg transition-all ${editor.isActive('link') ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          disabled={isCodeView}
+          className={`p-2 rounded-lg transition-all disabled:opacity-30 ${editor.isActive('link') && !isCodeView ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
           title="Chèn/Sửa liên kết"
         >
           <Link className="h-4 w-4" />
@@ -417,7 +545,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => triggerModal('image-url')}
-          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+          disabled={isCodeView}
+          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-all"
           title="Chèn ảnh từ URL ngoài"
         >
           <Image className="h-4 w-4" />
@@ -427,8 +556,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all relative disabled:opacity-50"
+          disabled={isCodeView || isUploading}
+          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all relative disabled:opacity-30"
           title="Tải ảnh từ máy tính lên"
         >
           {isUploading ? (
@@ -448,7 +577,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => triggerModal('youtube')}
-          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+          disabled={isCodeView}
+          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-all"
           title="Nhúng video YouTube"
         >
           <Video className="h-4 w-4" />
@@ -456,15 +586,30 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
 
         <div className="h-5 w-[1px] bg-white/10 mx-1" />
 
-        {/* Custom Actions */}
+        {/* HTML Edit Mode Toggle Button */}
         <button
           type="button"
-          onClick={() => triggerModal('paste-html')}
-          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1 text-xs font-semibold"
-          title="Dán nội dung HTML có sẵn"
+          onClick={toggleCodeView}
+          className={`p-2 rounded-lg transition-all flex items-center gap-1 text-xs font-semibold ${
+            isCodeView 
+              ? 'bg-gradient-to-r from-accent-cyan to-secondary text-slate-950 font-bold shadow-md shadow-accent-cyan/20' 
+              : 'text-slate-300 hover:text-white hover:bg-white/10 bg-white/5 border border-white/10'
+          }`}
+          title={isCodeView ? "Chuyển về giao diện soạn thảo trực quan" : "Chuyển sang chế độ chỉnh sửa mã HTML nguồn"}
         >
-          <FileCode className="h-4 w-4" />
-          <span className="hidden sm:inline">Dán HTML</span>
+          {isCodeView ? <Eye className="h-4 w-4" /> : <FileCode className="h-4 w-4 text-accent-cyan" />}
+          <span className="hidden sm:inline">{isCodeView ? 'Xem Trực Quan' : 'Sửa HTML'}</span>
+        </button>
+
+        {/* HTML Modal Dialog trigger for quick popup edit */}
+        <button
+          type="button"
+          onClick={() => triggerModal('edit-html')}
+          className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-1 text-xs font-medium"
+          title="Mở cửa sổ chỉnh sửa / Dán HTML"
+        >
+          <Code2 className="h-4 w-4" />
+          <span className="hidden md:inline">Cửa sổ HTML</span>
         </button>
 
         {/* Fullscreen Button */}
@@ -488,7 +633,8 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
         <button
           type="button"
           onClick={() => setConfirmClearOpen(true)}
-          className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/20 transition-all"
+          disabled={isCodeView}
+          className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/20 disabled:opacity-30 transition-all"
           title="Xóa định dạng"
         >
           <Trash2 className="h-4 w-4" />
@@ -496,24 +642,95 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
       </div>
 
       {/* 2. Main Editor Content Container */}
-      <div className={isFullscreen ? "flex-1 overflow-y-auto" : "flex-grow min-h-[500px] bg-slate-950/30 p-1"}>
-        <div className={isFullscreen ? "mx-auto w-full max-w-5xl px-8 py-8" : "w-full"}>
-          <EditorContent editor={editor} />
-        </div>
+      <div className={isFullscreen ? "flex-1 overflow-y-auto flex flex-col" : "flex-grow min-h-[500px] bg-slate-950/30 p-1 flex flex-col"}>
+        
+        {isCodeView ? (
+          /* HTML Code Editor View */
+          <div className="flex-1 flex flex-col bg-slate-950 min-h-[500px]">
+            {/* HTML Sub-bar Toolbar */}
+            <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-white/10 text-xs text-slate-400">
+              <div className="flex items-center gap-2 font-mono">
+                <span className="inline-block w-2 h-2 rounded-full bg-accent-cyan animate-pulse"></span>
+                <span className="text-white font-semibold">Chế độ chỉnh sửa mã nguồn HTML</span>
+                <span className="text-slate-500">({lineCount} dòng | {codeValue.length} ký tự)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleFormatCode}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 flex items-center gap-1 transition-all"
+                  title="Tự động canh lề và thụt dòng mã HTML"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-accent-cyan" />
+                  <span>Định dạng HTML</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 flex items-center gap-1 transition-all"
+                  title="Sao chép toàn bộ mã HTML"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>Sao chép</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleCodeView}
+                  className="px-3 py-1 rounded-lg bg-accent-cyan text-slate-950 font-bold flex items-center gap-1 hover:brightness-110 transition-all"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Áp dụng</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Line numbers + Textarea Editor */}
+            <div className="flex-1 flex font-mono text-sm relative overflow-hidden min-h-[450px]">
+              {/* Line numbers column */}
+              <div className="select-none py-4 px-3 text-right bg-slate-900/50 text-slate-600 border-r border-white/5 font-mono text-xs leading-relaxed min-w-[48px] overflow-hidden">
+                {lineNumbers.map(n => (
+                  <div key={n}>{n}</div>
+                ))}
+              </div>
+              {/* Monospace Code Editor Textarea */}
+              <textarea
+                value={codeValue}
+                onChange={(e) => {
+                  setCodeValue(e.target.value);
+                  onChange(e.target.value);
+                }}
+                placeholder="<p>Nhập mã HTML của bạn tại đây...</p>"
+                className="flex-1 bg-transparent p-4 text-cyan-200 focus:outline-none font-mono text-sm leading-relaxed resize-none w-full border-none h-full selection:bg-accent-cyan/30"
+                spellCheck={false}
+              />
+            </div>
+          </div>
+        ) : (
+          /* Visual Rich Text Editor View */
+          <div className={isFullscreen ? "mx-auto w-full max-w-5xl px-8 py-8 flex-1" : "w-full flex-1"}>
+            <EditorContent editor={editor} />
+          </div>
+        )}
+
       </div>
 
       {/* 3. Inline Theme Modals for User Input */}
       {activeModal && (
-        <div className="absolute inset-0 z-20 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in duration-200">
+        <div className="absolute inset-0 z-20 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in duration-200">
             
             {/* Modal Title */}
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 {activeModal === 'link' && 'Cấu hình Liên kết tĩnh'}
                 {activeModal === 'image-url' && 'Chèn ảnh bằng liên kết URL'}
                 {activeModal === 'youtube' && 'Nhúng trình phát YouTube'}
-                {activeModal === 'paste-html' && 'Dán mã nguồn HTML (An toàn)'}
+                {activeModal === 'edit-html' && (
+                  <>
+                    <FileCode className="h-4 w-4 text-accent-cyan" />
+                    <span>Chỉnh sửa & Dán mã nguồn HTML</span>
+                  </>
+                )}
               </h4>
               <button 
                 type="button"
@@ -525,17 +742,28 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
             </div>
 
             {/* Modal Fields */}
-            {activeModal === 'paste-html' ? (
+            {activeModal === 'edit-html' ? (
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dán HTML code tại đây</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Mã nguồn HTML (Có thể xem và sửa trực tiếp)</label>
+                  <button
+                    type="button"
+                    onClick={() => setModalInput(formatHtml(modalInput))}
+                    className="text-xs text-accent-cyan hover:underline flex items-center gap-1"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    <span>Định dạng HTML</span>
+                  </button>
+                </div>
                 <textarea
                   value={modalInput}
                   onChange={(e) => setModalInput(e.target.value)}
-                  rows={8}
-                  placeholder="<p>Nhập mã HTML vào đây...</p>"
-                  className="w-full px-4 py-3 rounded-xl border border-white/10 bg-slate-950/50 text-sm text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-accent-cyan/30 focus:border-accent-cyan font-mono resize-none"
+                  rows={12}
+                  placeholder="<p>Nhập hoặc sửa mã HTML tại đây...</p>"
+                  className="w-full px-4 py-3 rounded-xl border border-white/10 bg-slate-950/80 text-sm text-cyan-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-accent-cyan/30 focus:border-accent-cyan font-mono resize-none leading-relaxed"
+                  spellCheck={false}
                 />
-                <span className="text-[10px] text-slate-500 italic mt-1">Các đoạn mã nguy hiểm như &lt;script&gt; và các trình xử lý sự kiện onclick/onerror sẽ tự động bị loại bỏ để chống tấn công XSS.</span>
+                <span className="text-[10px] text-slate-500 italic mt-1">Hệ thống hỗ trợ đầy đủ các thẻ HTML tiêu chuẩn (`&lt;p&gt;`, `&lt;h2&gt;`, `&lt;img&gt;`, `&lt;iframe&gt;`, `&lt;a&gt;`, `&lt;div&gt;`, `&lt;span&gt;`...). Các thẻ nguy hiểm chứa mã độc hại sẽ tự động được lọc an toàn.</span>
               </div>
             ) : (
               <div className="flex flex-col gap-2">
@@ -574,12 +802,12 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
                   activeModal === 'link' ? handleInsertLink :
                   activeModal === 'image-url' ? handleInsertImageUrl :
                   activeModal === 'youtube' ? handleInsertYoutube :
-                  handlePasteHtml
+                  handleApplyModalHtml
                 }
                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-950 bg-gradient-to-r from-accent-cyan to-secondary rounded-xl hover:shadow-lg hover:shadow-accent-cyan/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <Check className="h-3.5 w-3.5" />
-                <span>Xác nhận</span>
+                <span>Xác nhận & Cập nhật</span>
               </button>
             </div>
 
@@ -607,3 +835,4 @@ export default function TiptapEditor({ value, onChange }: TiptapEditorProps) {
 
   return editorLayout;
 }
+
